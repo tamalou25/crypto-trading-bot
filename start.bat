@@ -1,10 +1,7 @@
 @echo off
-echo ========================================
-echo   Demarrage du Crypto Trading Bot
-echo ========================================
-echo.
+chcp 65001 >nul
+set PYTHONIOENCODING=utf-8
+echo Demarrage du Crypto Trading Bot...
 call venv\Scripts\activate.bat
-echo Environnement virtuel active!
-echo.
 python bot.py
 pause

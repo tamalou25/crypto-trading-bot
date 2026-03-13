@@ -9,15 +9,26 @@ logger = logging.getLogger(__name__)
 class ExchangeClient:
     def __init__(self, mode='paper'):
         self.mode = mode
+        
+        # Testnet Binance si TRADING_MODE=paper ou TESTNET=true
+        use_testnet = os.getenv('TESTNET', 'true').lower() == 'true' or mode == 'paper'
+        
         self.exchange = ccxt.binance({
             'apiKey': os.getenv('BINANCE_API_KEY', ''),
             'secret': os.getenv('BINANCE_SECRET_KEY', ''),
-            'sandbox': False,
             'enableRateLimit': True,
-            'options': {'defaultType': 'spot'}
+            'options': {
+                'defaultType': 'spot',
+                'adjustForTimeDifference': True,
+            }
         })
+        
+        # Activer le testnet si besoin
+        if use_testnet:
+            self.exchange.set_sandbox_mode(True)
+        
         self.paper_balance = float(os.getenv('INITIAL_CAPITAL', 1000))
-        logger.info(f"Exchange initialisé en mode {mode}")
+        logger.info(f"Exchange initialise en mode {mode} | Testnet: {use_testnet}")
     
     def get_ohlcv(self, symbol, timeframe='15m', limit=200):
         try:
@@ -65,7 +76,7 @@ class ExchangeClient:
                 order = self.exchange.create_market_buy_order(symbol, amount)
             else:
                 order = self.exchange.create_market_sell_order(symbol, amount)
-            logger.info(f"[LIVE] Ordre {side} exécuté: {order['id']}")
+            logger.info(f"[LIVE] Ordre {side} execute: {order['id']}")
             return order
         except Exception as e:
             logger.error(f"Erreur ordre {side} {symbol}: {e}")
