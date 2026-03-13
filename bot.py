@@ -39,11 +39,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+CONFIDENCE_THRESHOLD = float(os.getenv('CONFIDENCE_THRESHOLD', 0.25))
+
 def print_banner():
     print(Fore.CYAN + """
  +===========================================+
  |     AI CRYPTO TRADING BOT                |
  |     github.com/tamalou25                |
+ |     Mode: PAPER (simulation)             |
  +===========================================+
     """ + Style.RESET_ALL)
 
@@ -60,30 +63,35 @@ def run_trading_cycle(exchange, strategy, risk_manager, portfolio, notifier, pai
                 continue
             
             signal = strategy.generate_signal(ohlcv, pair)
-            logger.info(f"Signal {pair}: {signal['action']} (confiance: {signal['confidence']:.2f}) | Score: {signal.get('tech_score', 0):.1f} | {signal.get('signals', [])}")
+            logger.info(f"Signal {pair}: {signal['action']} | Confiance: {signal['confidence']:.2f} | Score: {signal.get('tech_score', 0):.1f} | Indicateurs: {signal.get('signals', [])}")
             
             current_price = ohlcv['close'].iloc[-1]
+            logger.info(f"Prix actuel {pair}: {current_price:.4f} USDT")
             
+            # Verifier SL/TP
             risk_manager.check_open_positions(exchange, portfolio, current_price, pair)
             
-            # Seuil abaisse a 0.40 pour plus d'activite en paper
-            if signal['confidence'] >= 0.40:
+            if signal['confidence'] >= CONFIDENCE_THRESHOLD:
                 if signal['action'] == 'BUY' and not portfolio.has_position(pair):
                     if risk_manager.can_open_trade(portfolio):
                         amount = risk_manager.calculate_position_size(portfolio, current_price)
                         order = exchange.place_order(pair, 'buy', amount, current_price)
                         if order:
                             portfolio.open_position(pair, current_price, amount, signal)
-                            notifier.send(f"ACHAT {pair} | Prix: {current_price:.4f} | Montant: {amount:.4f} | Confiance: {signal['confidence']:.0%}")
-                            logger.info(f"Position ouverte sur {pair} a {current_price}")
+                            msg = f"[ACHAT] {pair} | Prix: {current_price:.4f} | Montant: {amount:.6f} | Confiance: {signal['confidence']:.0%}"
+                            notifier.send(msg)
+                            logger.info(msg)
                 
                 elif signal['action'] == 'SELL' and portfolio.has_position(pair):
                     position = portfolio.get_position(pair)
                     order = exchange.place_order(pair, 'sell', position['amount'], current_price)
                     if order:
                         pnl = portfolio.close_position(pair, current_price)
-                        notifier.send(f"VENTE {pair} | Prix: {current_price:.4f} | PnL: {pnl:+.2f} USDT")
-                        logger.info(f"Position fermee sur {pair} | PnL: {pnl:+.2f}")
+                        msg = f"[VENTE] {pair} | Prix: {current_price:.4f} | PnL: {pnl:+.2f} USDT"
+                        notifier.send(msg)
+                        logger.info(msg)
+            else:
+                logger.info(f"Signal trop faible ({signal['confidence']:.2f} < {CONFIDENCE_THRESHOLD}) - attente...")
         
         except Exception as e:
             logger.error(f"Erreur sur {pair}: {e}")
@@ -102,7 +110,9 @@ def main():
     
     print(Fore.YELLOW + f"\n Mode: {mode.upper()}")
     print(Fore.YELLOW + f" Paires: {', '.join(pairs)}")
-    print(Fore.YELLOW + f" Capital: {capital} USDT\n")
+    print(Fore.YELLOW + f" Capital: {capital} USDT")
+    print(Fore.YELLOW + f" Seuil confiance: {CONFIDENCE_THRESHOLD}")
+    print(Fore.YELLOW + f" Stop Loss: {os.getenv('STOP_LOSS_PCT', '0.025')}% | Take Profit: {os.getenv('TAKE_PROFIT_PCT', '0.05')}%\n")
     
     if mode == 'live':
         print(Fore.RED + "MODE LIVE ACTIVE - Argent reel utilise!")
@@ -132,18 +142,16 @@ def main():
     logger.info("Dashboard disponible sur http://localhost:5000")
     
     scheduler = BackgroundScheduler()
-    interval_minutes = 5
-    
     scheduler.add_job(
         run_trading_cycle,
         'interval',
-        minutes=interval_minutes,
+        minutes=5,
         args=[exchange, strategy, risk_manager, portfolio, notifier, pairs]
     )
     scheduler.start()
+    logger.info("Bot demarre! Cycle toutes les 5 minutes")
     
-    logger.info(f"Bot demarre! Cycle toutes les {interval_minutes} minutes")
-    
+    # Premier cycle immediat
     run_trading_cycle(exchange, strategy, risk_manager, portfolio, notifier, pairs)
     
     try:
