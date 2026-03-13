@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 Crypto Trading Bot - Dashboard</title>
+    <style>
+        :root {
+            --bg-dark: #0a0e1a;
+            --bg-card: #1a1f3a;
+            --accent: #00ff88;
+            --accent-hover: #00cc6a;
+            --text: #e0e0e0;
+            --text-muted: #888;
+            --red: #ff4444;
+            --green: #00ff88;
+            --orange: #ffa500;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: var(--bg-dark);
+            color: var(--text);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            line-height: 1.6;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1f3a, #0d1117);
+            padding: 1.5rem 2rem;
+            border-bottom: 2px solid var(--accent);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            font-size: 1.8rem;
+            color: var(--accent);
+        }
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        .status-paper { background: rgba(255, 165, 0, 0.2); border: 2px solid var(--orange); color: var(--orange); }
+        .status-live { background: rgba(255, 0, 0, 0.2); border: 2px solid var(--red); color: var(--red); }
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+        .grid { display: grid; gap: 1.5rem; }
+        .grid-3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+        .grid-2 { grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid #2a3060;
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #2a3060;
+        }
+        .card-header h2 {
+            font-size: 1.1rem;
+            color: var(--accent);
+        }
+        .metric {
+            text-align: center;
+            padding: 1rem;
+        }
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 0.5rem 0;
+        }
+        .metric-label {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+        .positive { color: var(--green); }
+        .negative { color: var(--red); }
+        .neutral { color: #4fc3f7; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 2px solid #2a3060;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #15192e;
+            font-size: 0.9rem;
+        }
+        tr:hover { background: rgba(255, 255, 255, 0.03); }
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .badge-buy { background: rgba(0, 255, 136, 0.2); color: var(--green); border: 1px solid var(--green); }
+        .badge-sell { background: rgba(255, 68, 68, 0.2); color: var(--red); border: 1px solid var(--red); }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: var(--bg-dark);
+        }
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+        }
+        .btn-danger {
+            background: var(--red);
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #cc0000;
+        }
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .loader {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid var(--accent);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+        }
+        .chart-container {
+            height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+        }
+        @media (max-width: 768px) {
+            .header { flex-direction: column; gap: 1rem; text-align: center; }
+            .grid-3, .grid-2 { grid-template-columns: 1fr; }
+            .controls { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 AI Crypto Trading Bot</h1>
+        <div>
+            <span class="status-badge status-paper" id="mode-badge">MODE: PAPER</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Métriques principales -->
+        <div class="grid grid-3">
+            <div class="card">
+                <div class="metric">
+                    <div class="metric-label">💰 Capital Total</div>
+                    <div class="metric-value neutral" id="total-value">---</div>
+                    <div class="metric-label">USDT</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="metric">
+                    <div class="metric-label">📈 ROI</div>
+                    <div class="metric-value" id="roi">---</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="metric">
+                    <div class="metric-label">🎯 Win Rate</div>
+                    <div class="metric-value" id="winrate">---</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats secondaires -->
+        <div class="grid grid-3" style="margin-top: 1.5rem;">
+            <div class="card">
+                <div class="metric">
+                    <div class="metric-label">💵 Cash Disponible</div>
+                    <div class="metric-value neutral" id="cash">---</div>
+                    <div class="metric-label">USDT</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="metric">
+                    <div class="metric-label">📊 Total Trades</div>
+                    <div class="metric-value neutral" id="total-trades">---</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="metric">
+                    <div class="metric-label">💸 PnL Total</div>
+                    <div class="metric-value" id="total-pnl">---</div>
+                    <div class="metric-label">USDT</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Positions & Historique -->
+        <div class="grid grid-2" style="margin-top: 1.5rem;">
+            <div class="card">
+                <div class="card-header">
+                    <h2>📈 Positions Ouvertes</h2>
+                    <span id="positions-count" class="badge badge-buy">0</span>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Paire</th>
+                            <th>Amount</th>
+                            <th>Prix Entrée</th>
+                            <th>PnL Estimé</th>
+                        </tr>
+                    </thead>
+                    <tbody id="positions-table">
+                        <tr><td colspan="4" class="empty-state">Aucune position ouverte</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>📝 Derniers Trades</h2>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Paire</th>
+                            <th>Type</th>
+                            <th>PnL</th>
+                            <th>%</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-table">
+                        <tr><td colspan="4" class="empty-state">Aucun trade encore</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Contrôles -->
+        <div class="card" style="margin-top: 1.5rem;">
+            <div class="card-header">
+                <h2>⚙️ Contrôles</h2>
+            </div>
+            <div class="controls">
+                <button class="btn btn-primary" onclick="refreshData()">🔄 Rafraîchir</button>
+                <button class="btn btn-danger" onclick="stopBot()">🛑 Arrêter le Bot</button>
+            </div>
+            <p style="margin-top: 1rem; color: var(--text-muted); font-size: 0.85rem;">
+                Dernière mise à jour: <span id="last-update">---</span>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:5000/api/status';
+
+        async function fetchData() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error('API non disponible');
+                const data = await response.json();
+                updateUI(data);
+            } catch (error) {
+                console.error('Erreur:', error);
+                showError();
+            }
+        }
+
+        function updateUI(data) {
+            // Métriques principales
+            document.getElementById('total-value').textContent = data.total_value.toFixed(2);
+            document.getElementById('roi').textContent = (data.roi >= 0 ? '+' : '') + data.roi.toFixed(2) + '%';
+            document.getElementById('roi').className = 'metric-value ' + (data.roi >= 0 ? 'positive' : 'negative');
+            document.getElementById('winrate').textContent = data.win_rate.toFixed(1) + '%';
+            document.getElementById('winrate').className = 'metric-value ' + (data.win_rate >= 50 ? 'positive' : 'negative');
+            document.getElementById('cash').textContent = data.cash.toFixed(2);
+            document.getElementById('total-trades').textContent = data.total_trades;
+            document.getElementById('total-pnl').textContent = (data.total_pnl >= 0 ? '+' : '') + data.total_pnl.toFixed(2);
+            document.getElementById('total-pnl').className = 'metric-value ' + (data.total_pnl >= 0 ? 'positive' : 'negative');
+
+            // Mode
+            const modeBadge = document.getElementById('mode-badge');
+            modeBadge.textContent = 'MODE: ' + data.mode.toUpperCase();
+            modeBadge.className = 'status-badge status-' + data.mode;
+
+            // Positions
+            const positionsTable = document.getElementById('positions-table');
+            document.getElementById('positions-count').textContent = data.positions.length;
+            if (data.positions.length === 0) {
+                positionsTable.innerHTML = '<tr><td colspan="4" class="empty-state">Aucune position ouverte</td></tr>';
+            } else {
+                positionsTable.innerHTML = data.positions.map(p => `
+                    <tr>
+                        <td><strong>${p.symbol}</strong></td>
+                        <td>${p.amount.toFixed(6)}</td>
+                        <td>${p.entry_price.toFixed(4)}</td>
+                        <td class="${p.pnl >= 0 ? 'positive' : 'negative'}">${p.pnl >= 0 ? '+' : ''}${p.pnl.toFixed(2)}</td>
+                    </tr>
+                `).join('');
+            }
+
+            // Historique
+            const historyTable = document.getElementById('history-table');
+            if (data.history.length === 0) {
+                historyTable.innerHTML = '<tr><td colspan="4" class="empty-state">Aucun trade encore</td></tr>';
+            } else {
+                const last10 = data.history.slice().reverse().slice(0, 10);
+                historyTable.innerHTML = last10.map(t => `
+                    <tr>
+                        <td><strong>${t.symbol}</strong></td>
+                        <td><span class="badge ${t.pnl >= 0 ? 'badge-buy' : 'badge-sell'}">${t.pnl >= 0 ? 'PROFIT' : 'LOSS'}</span></td>
+                        <td class="${t.pnl >= 0 ? 'positive' : 'negative'}">${t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(2)}</td>
+                        <td class="${t.pnl_pct >= 0 ? 'positive' : 'negative'}">${t.pnl_pct >= 0 ? '+' : ''}${t.pnl_pct.toFixed(2)}%</td>
+                    </tr>
+                `).join('');
+            }
+
+            document.getElementById('last-update').textContent = new Date().toLocaleString('fr-FR');
+        }
+
+        function showError() {
+            document.getElementById('total-value').textContent = 'ERREUR';
+            document.getElementById('roi').textContent = 'N/A';
+            document.getElementById('winrate').textContent = 'N/A';
+        }
+
+        function refreshData() {
+            fetchData();
+        }
+
+        function stopBot() {
+            if (confirm('⚠️ Êtes-vous sûr de vouloir arrêter le bot ?')) {
+                alert('Arrêtez le bot manuellement avec Ctrl+C dans le terminal.');
+            }
+        }
+
+        // Auto-refresh toutes les 5 secondes
+        fetchData();
+        setInterval(fetchData, 5000);
+    </script>
+</body>
+</html>
