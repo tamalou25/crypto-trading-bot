@@ -2,6 +2,9 @@
 echo ========================================
 echo   Demarrage du Crypto Trading Bot
 echo ========================================
-call venv\Scripts\activate
+echo.
+call venv\Scripts\activate.bat
+echo Environnement virtuel active!
+echo.
 python bot.py
 pause
