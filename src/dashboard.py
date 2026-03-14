@@ -1,21 +1,25 @@
 from flask import Flask, render_template_string, jsonify
 from datetime import datetime
-import threading, time, statistics
+import threading, time, statistics, os
 
 app = Flask(__name__)
 _portfolio = None
 _exchange  = None
 _cache = {'market': {}, 'indicators': {}, 'analysis': {}, 'last_update': '--'}
+_SL_PCT = float(os.getenv('STOP_LOSS_PCT', 0.025))
+_TP_PCT = float(os.getenv('TAKE_PROFIT_PCT', 0.05))
 
 # ─── Thread cache marche ────────────────────────────────────────────────────
 def _update_cache():
+    strat = None
     while True:
         try:
             if _exchange is None:
                 time.sleep(2); continue
-            from src.strategy import TradingStrategy
-            strat = TradingStrategy()
-            strat.set_exchange(_exchange)
+            if strat is None:
+                from src.strategy import TradingStrategy
+                strat = TradingStrategy()
+                strat.set_exchange(_exchange)
             for pair in ['BTC/USDT','ETH/USDT','SOL/USDT','BNB/USDT']:
                 try:
                     ohlcv = _exchange.get_ohlcv(pair, timeframe='1m', limit=200)
@@ -480,13 +484,13 @@ def api_data():
         if t == 'short':
             pnl     = (pos['entry_price'] - curr) * pos['amount']
             pnl_pct = (pos['entry_price'] - curr) / pos['entry_price'] * 100
-            sl = pos['entry_price'] * 1.10
-            tp = pos['entry_price'] * 0.80
+            sl = pos['entry_price'] * (1 + _SL_PCT)
+            tp = pos['entry_price'] * (1 - _TP_PCT)
         else:
             pnl     = (curr - pos['entry_price']) * pos['amount']
             pnl_pct = (curr - pos['entry_price']) / pos['entry_price'] * 100
-            sl = pos['entry_price'] * 0.90
-            tp = pos['entry_price'] * 1.20
+            sl = pos['entry_price'] * (1 - _SL_PCT)
+            tp = pos['entry_price'] * (1 + _TP_PCT)
         val = curr * pos['amount']
         pos_val += val
         positions_out[sym] = {

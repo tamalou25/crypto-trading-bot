@@ -39,9 +39,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-PAIRS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT']
-CAPITAL = 1000.0
+PAIRS = [p.strip() for p in os.getenv('TRADING_PAIRS', 'BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT').split(',')]
+CAPITAL = float(os.getenv('INITIAL_CAPITAL', 1000.0))
 CYCLE_SECONDS = 30
+SL_PCT = float(os.getenv('STOP_LOSS_PCT', 0.025))
+TP_PCT = float(os.getenv('TAKE_PROFIT_PCT', 0.05))
 
 live_data = {}
 
@@ -139,13 +141,13 @@ def render_terminal(portfolio):
                     if ptype == 'short':
                         ppnl = (pos['entry_price'] - curr) * pos['amount']
                         ppct = (pos['entry_price'] - curr) / pos['entry_price'] * 100
-                        sl = pos['entry_price'] * 1.10
-                        tp = pos['entry_price'] * 0.80
+                        sl = pos['entry_price'] * (1 + SL_PCT)
+                        tp = pos['entry_price'] * (1 - TP_PCT)
                     else:
                         ppnl = (curr - pos['entry_price']) * pos['amount']
                         ppct = (curr - pos['entry_price']) / pos['entry_price'] * 100
-                        sl = pos['entry_price'] * 0.90
-                        tp = pos['entry_price'] * 1.20
+                        sl = pos['entry_price'] * (1 - SL_PCT)
+                        tp = pos['entry_price'] * (1 + TP_PCT)
                     pc = Fore.GREEN if ppnl >= 0 else Fore.RED
                     tcolor = Fore.GREEN if ptype == 'long' else Fore.RED
                     print(f"  {sym:<14}{tcolor}{ptype.upper():<8}{Style.RESET_ALL}"
@@ -205,7 +207,7 @@ def do_buy(exchange, portfolio, risk_manager, pair, strategy_signal=None, trade_
     except Exception as e:
         logger.error(f"do_buy error {pair}: {e}")
 
-def run_cycle(exchange, strategy, risk_manager, portfolio):
+def run_cycle(exchange, strategy, risk_manager, portfolio, notifier):
     """Cycle principal: analyse + trade + auto-close en profit"""
     portfolio.cycles = getattr(portfolio, 'cycles', 0) + 1
 
@@ -226,6 +228,10 @@ def run_cycle(exchange, strategy, risk_manager, portfolio):
             # 1. Verifier SL/TP d'abord
             closed = risk_manager.check_open_positions(exchange, portfolio, price, pair)
             if closed:
+                last = portfolio.trade_history[-1] if portfolio.trade_history else None
+                if last:
+                    reason = 'TAKE PROFIT' if last['pnl'] > 0 else 'STOP LOSS'
+                    notifier.send(f"{reason} {pair} @ {price:.2f}\nPnL: {last['pnl']:+.2f} USDT ({last['pnl_pct']:+.2f}%)")
                 # Re-ouvrir immediatement apres fermeture
                 time.sleep(0.3)
                 new_type = 'long' if action != 'SELL' else 'short'
@@ -249,6 +255,7 @@ def run_cycle(exchange, strategy, risk_manager, portfolio):
                     order = exchange.place_order(pair, 'sell', pos['amount'], price)
                     if order:
                         pnl = portfolio.close_position(pair, price)
+                        notifier.send(f"SIGNAL CLOSE {pair} @ {price:.2f}\nPnL: {pnl:+.2f} USDT")
                         time.sleep(0.3)
                         # Re-ouvrir dans le sens du nouveau signal
                         new_type = 'short' if action == 'SELL' else 'long'
@@ -258,8 +265,10 @@ def run_cycle(exchange, strategy, risk_manager, portfolio):
             # 3. Ouvrir nouvelle position selon signal
             if action == 'BUY':
                 do_buy(exchange, portfolio, risk_manager, pair, signal, trade_type='long')
+                notifier.send(f"ACHAT LONG {pair} @ {price:.2f}\nConfiance: {confidence:.0%}")
             elif action == 'SELL':
                 do_buy(exchange, portfolio, risk_manager, pair, signal, trade_type='short')
+                notifier.send(f"ACHAT SHORT {pair} @ {price:.2f}\nConfiance: {confidence:.0%}")
 
         except Exception as e:
             logger.error(f"Cycle error {pair}: {e}")
@@ -294,7 +303,7 @@ def main():
     # Scheduler
     scheduler = BackgroundScheduler()
     scheduler.add_job(run_cycle, 'interval', seconds=CYCLE_SECONDS,
-                      args=[exchange, strategy, risk_manager, portfolio])
+                      args=[exchange, strategy, risk_manager, portfolio, notifier])
     scheduler.start()
 
     try:

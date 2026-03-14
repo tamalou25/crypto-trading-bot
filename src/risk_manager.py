@@ -5,10 +5,10 @@ logger = logging.getLogger(__name__)
 
 class RiskManager:
     def __init__(self):
-        self.stop_loss_pct = float(os.getenv('STOP_LOSS_PCT', 0.10))
-        self.take_profit_pct = float(os.getenv('TAKE_PROFIT_PCT', 0.20))
-        self.max_position_size = float(os.getenv('MAX_POSITION_SIZE', 0.90))
-        self.max_open_trades = int(os.getenv('MAX_OPEN_TRADES', 10))
+        self.stop_loss_pct = float(os.getenv('STOP_LOSS_PCT', 0.025))
+        self.take_profit_pct = float(os.getenv('TAKE_PROFIT_PCT', 0.05))
+        self.max_position_size = float(os.getenv('MAX_POSITION_SIZE', 0.15))
+        self.max_open_trades = int(os.getenv('MAX_OPEN_TRADES', 3))
         self.trailing_stop = False
     
     def can_open_trade(self, portfolio):

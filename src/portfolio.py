@@ -55,8 +55,7 @@ class Portfolio:
         else:
             pnl = (exit_price - pos['entry_price']) * pos['amount']
         
-        revenue = exit_price * pos['amount']
-        self.cash += revenue
+        self.cash += pos['cost'] + pnl
         self.total_pnl += pnl
         
         trade = {
